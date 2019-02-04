@@ -30,6 +30,7 @@ fn handle_connection(mut stream: TcpStream, get_mappings: &HashMap<String,String
 
 	let request_str = String::from_utf8_lossy(&buffer[..]).to_string();
 	let request = process_request(request_str);
+	println!("{:#?}", &request);
 
 	if request.get("Method").unwrap() == "GET" {
 		let actual_req_url = request.get("Url").unwrap();
@@ -45,12 +46,12 @@ fn handle_connection(mut stream: TcpStream, get_mappings: &HashMap<String,String
 					&content_length_header,
 					"",
 					&contents
-				]).join("\n");
+				]).join("\r\n");
 				stream.write(response.as_bytes()).unwrap();
 				stream.flush().unwrap();
 			}
 			None => {
-				let response = "HTTP/1.1 404 NOT FOUND\n\n";
+				let response = "HTTP/1.1 404 NOT FOUND\r\n\r\n";
 				stream.write(response.as_bytes()).unwrap();
 				stream.flush().unwrap();
 			}
@@ -59,22 +60,23 @@ fn handle_connection(mut stream: TcpStream, get_mappings: &HashMap<String,String
 }
 
 fn process_request(request: String) -> HashMap<String,String> {
+	let request_array: Vec<&str> = request.split("\r\n").collect();
 	let mut request_properties: HashMap<String,String> =
-		request
-			.split("\n")
+		request_array
+			.iter()
 			.enumerate()
-			.filter(|(i,_line)| i>&1) //process first line separately
+			.filter(|(i, _line)| i>&1) //process first line separately
 			.map(|(_i,line)| { //split lines on ": " and add to a map
-				let mut it = line.split(": ");
-				return (it.next().unwrap().to_string(), it.next().unwrap().to_string());
+				let it: Vec<&str> = line.split(": ").collect();
+				return (it[0].to_string(), it[1].to_string());
 			})
 			.collect();
 	//save standard request properties separately as they are all on the same line
-	let first_line = request.split("\n").next().unwrap();
-	request_properties.insert("Request".to_string(),first_line.to_string());
-	let mut http_std_request = first_line.split(" ");
-	request_properties.insert("Method".to_string(),http_std_request.next().unwrap().to_string());
-	request_properties.insert("Url".to_string(),http_std_request.next().unwrap().to_string());
-	request_properties.insert("Http".to_string(),http_std_request.next().unwrap().to_string());
+	let http_std_request: Vec<&str> = request_array[0].split(" ").collect();
+	if http_std_request.len() == 3 {
+		request_properties.insert("Method".to_string(),http_std_request[0].to_string());
+		request_properties.insert("Url".to_string(),http_std_request[1].to_string());
+		request_properties.insert("Http".to_string(),http_std_request[2].to_string());
+	}
 	return request_properties;
 }
