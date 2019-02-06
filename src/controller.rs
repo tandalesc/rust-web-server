@@ -6,17 +6,17 @@ use http;
 
 type Request<'a> = &'a HashMap<String,String>;
 type Response<'a> = String;
-type RequestHandler = Fn(Request)->Response;
+type RequestHandler = Box<Fn(Request)->Response>;
 
 pub struct ControllerRule
 {
     pub method: http::HttpMethod,
 	pub url: &'static str,
-    pub action: Box<RequestHandler>
+    pub action: RequestHandler
 }
 
 //sample action that returns the contents of a file
-pub fn file_response(file_name: &'static str) -> Box<Fn(Request)->Response> {
+pub fn file_response(file_name: &'static str) -> RequestHandler {
     return Box::new(move |request| {
         let mut contents = fs::read_to_string(&file_name).unwrap();
         //replace optional variables prior to calculating content length
@@ -33,7 +33,8 @@ pub fn file_response(file_name: &'static str) -> Box<Fn(Request)->Response> {
     });
 }
 
-pub fn text_response(text: &'static str) -> Box<Fn(Request)->Response> {
+//sample action that returns plain text
+pub fn text_response(text: &'static str) -> RequestHandler {
     return Box::new(move |request| {
         let content_length = text.chars().count();
         let mut response = HashMap::new();
@@ -69,7 +70,7 @@ pub fn get_rules() -> Vec<ControllerRule> {
 }
 
 //get an action for a given url endpoint (or None)
-pub fn match_rule(url: &str) -> Option<Box<RequestHandler>> {
+pub fn match_rule(url: &str) -> Option<RequestHandler> {
     for rule in get_rules() {
         if rule.url == url {
             return Some(rule.action);
